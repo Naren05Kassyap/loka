@@ -1,0 +1,58 @@
+[
+  {
+    "userId": "user-north",
+    "username": "Northy",
+    "avatar": "https://api.dicebear.com/7.x/adventurer/png?seed=Northy",
+    "latitude": 37.4221537,
+    "longitude": -122.083922,
+    "timestamp": "2025-05-19T02:27:28.295Z"
+  },
+  {
+    "userId": "user-south",
+    "username": "Southy",
+    "avatar": "https://api.dicebear.com/7.x/adventurer/png?seed=Southy",
+    "latitude": 37.4214337,
+    "longitude": -122.083922,
+    "timestamp": "2025-05-19T02:27:30.890Z"
+  },
+  {
+    "userId": "user-east",
+    "username": "Easty",
+    "avatar": "https://api.dicebear.com/7.x/adventurer/png?seed=Easty",
+    "latitude": 37.4217937,
+    "longitude": -122.083522,
+    "timestamp": "2025-05-19T02:27:33.282Z"
+  },
+  {
+    "userId": "user-west",
+    "username": "Westy",
+    "avatar": "https://api.dicebear.com/7.x/adventurer/png?seed=Westy",
+    "latitude": 37.4217937,
+    "longitude": -122.084322,
+    "timestamp": "2025-05-19T02:27:36.418Z"
+  },
+  {
+    "userId": "user-northwest",
+    "username": "Noel",
+    "avatar": "https://api.dicebear.com/7.x/adventurer/png?seed=Noel",
+    "latitude": 37.4220537,
+    "longitude": -122.084172,
+    "timestamp": "2025-05-19T02:27:54.708Z"
+  },
+  {
+    "userId": "user-southwest",
+    "username": "Sasha",
+    "avatar": "https://api.dicebear.com/7.x/adventurer/png?seed=Sasha",
+    "latitude": 37.4215337,
+    "longitude": -122.084172,
+    "timestamp": "2025-05-19T02:27:58.917Z"
+  },
+  {
+    "userId": "123e4567-e89b-12d3-a456-426614174000",
+    "username": "You",
+    "avatar": "https://api.dicebear.com/7.x/adventurer/png?seed=You",
+    "latitude": 37.4217937,
+    "longitude": -122.083922,
+    "timestamp": "2025-05-19T02:34:36.853Z"
+  }
+]
