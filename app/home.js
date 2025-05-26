@@ -1,7 +1,15 @@
 import React, { useEffect, useState } from 'react';
-import { View, StyleSheet, Dimensions, Image, ActivityIndicator, Alert, Text, Animated, Easing } from 'react-native';
-
-
+import {
+  View,
+  StyleSheet,
+  Dimensions,
+  Image,
+  ActivityIndicator,
+  Alert,
+  Text,
+  Animated,
+  Easing,
+} from 'react-native';
 import * as Location from 'expo-location';
 
 const { width } = Dimensions.get('window');
@@ -13,17 +21,12 @@ const AVATAR_SIZE = 40;
 export default function HomeScreen() {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
-  const placedAvatars = []; // Track avatar positions to avoid overlap
+  const placedAvatars = [];
 
-  useEffect(() => {
-    (async () => {
-      let { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Permission Denied', 'Location access is required for radar.');
-        return;
-      }
-
-      let location = await Location.getCurrentPositionAsync({});
+  // 🔁 Modular location update function
+  const sendLocationToBackend = async () => {
+    try {
+      const location = await Location.getCurrentPositionAsync({});
       const { latitude, longitude } = location.coords;
 
       const payload = {
@@ -39,44 +42,74 @@ export default function HomeScreen() {
         body: JSON.stringify(payload),
       });
 
-      const res = await fetch(`http://10.0.2.2:5000/location/nearby?lat=${latitude}&lon=${longitude}&radius=${MAX_RADIUS_METERS}`);
+      console.log('📡 Location updated');
+      return { latitude, longitude };
+    } catch (err) {
+      console.warn('❌ Failed to update location:', err);
+      return null;
+    }
+  };
+
+  // ✅ Fetch on initial load
+  useEffect(() => {
+    (async () => {
+      let { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Denied', 'Location access is required for radar.');
+        return;
+      }
+
+      const coords = await sendLocationToBackend();
+      if (!coords) return;
+
+      const res = await fetch(
+        `http://10.0.2.2:5000/location/nearby?lat=${coords.latitude}&lon=${coords.longitude}&radius=${MAX_RADIUS_METERS}`
+      );
       const data = await res.json();
       setUsers(data);
       setLoading(false);
     })();
   }, []);
 
-  const renderDistanceRings = () => {
-  const rings = [10, 20, 30, 40, 50]; // meters
-  return rings.map(radius => {
-    const pixelRadius = (radius / MAX_RADIUS_METERS) * (RADAR_RADIUS / 2);
-    return (
-      <View
-        key={radius}
-        style={{
-          position: 'absolute',
-          top: RADAR_CENTER - pixelRadius,
-          left: RADAR_CENTER - pixelRadius,
-          width: pixelRadius * 2,
-          height: pixelRadius * 2,
-          borderRadius: pixelRadius,
-          borderWidth: 1,
-          borderColor: '#444',
-          opacity: 0.4,
-          justifyContent: 'center',
-          alignItems: 'center',
-        }}
-      >
-        {radius % 20 === 0 && (
-          <View style={{ position: 'absolute', top: -10 }}>
-            <Text style={{ color: '#888', fontSize: 10 }}>{radius}m</Text>
-          </View>
-        )}
-      </View>
-    );
-  });
-};
+  // 🔄 Keep sending location every 10 seconds
+  useEffect(() => {
+    const interval = setInterval(() => {
+      sendLocationToBackend();
+    }, 10000);
 
+    return () => clearInterval(interval);
+  }, []);
+
+  const renderDistanceRings = () => {
+    const rings = [10, 20, 30, 40, 50];
+    return rings.map((radius) => {
+      const pixelRadius = (radius / MAX_RADIUS_METERS) * (RADAR_RADIUS / 2);
+      return (
+        <View
+          key={radius}
+          style={{
+            position: 'absolute',
+            top: RADAR_CENTER - pixelRadius,
+            left: RADAR_CENTER - pixelRadius,
+            width: pixelRadius * 2,
+            height: pixelRadius * 2,
+            borderRadius: pixelRadius,
+            borderWidth: 1,
+            borderColor: '#444',
+            opacity: 0.4,
+            justifyContent: 'center',
+            alignItems: 'center',
+          }}
+        >
+          {radius % 20 === 0 && (
+            <View style={{ position: 'absolute', top: -10 }}>
+              <Text style={{ color: '#888', fontSize: 10 }}>{radius}m</Text>
+            </View>
+          )}
+        </View>
+      );
+    });
+  };
 
   const isOverlapping = (x, y, radius = AVATAR_SIZE) => {
     for (const placed of placedAvatars) {
@@ -97,13 +130,15 @@ export default function HomeScreen() {
     let attempts = 0;
     let x, y;
 
-    // Try adjusting angle until no overlap or max attempts
     do {
       x = Math.cos(rad) * distancePx;
       y = Math.sin(rad) * distancePx;
       rad += 0.15;
       attempts++;
-    } while (isOverlapping(RADAR_CENTER + x, RADAR_CENTER + y) && attempts < 10);
+    } while (
+      isOverlapping(RADAR_CENTER + x, RADAR_CENTER + y) &&
+      attempts < 10
+    );
 
     placedAvatars.push({ x: RADAR_CENTER + x, y: RADAR_CENTER + y });
 
@@ -119,21 +154,28 @@ export default function HomeScreen() {
     <View style={styles.container}>
       <View style={styles.radar}>
         {renderDistanceRings()}
-        {/* Central Avatar (You) */}
+
+        {/* Center avatar */}
         <Image
           source={{ uri: 'https://api.dicebear.com/7.x/adventurer/png?seed=You' }}
-          style={[styles.avatar, {
-            top: RADAR_CENTER - AVATAR_SIZE / 2,
-            left: RADAR_CENTER - AVATAR_SIZE / 2,
-          }]}
+          style={[
+            styles.avatar,
+            {
+              top: RADAR_CENTER - AVATAR_SIZE / 2,
+              left: RADAR_CENTER - AVATAR_SIZE / 2,
+            },
+          ]}
         />
 
-        {/* Reset avatar tracker for each render */}
+        {/* Clear avatar position memory */}
         {placedAvatars.splice(0, placedAvatars.length)}
 
-        {/* Render Nearby Users */}
-        {users.map(user => {
-          const { top, left } = getXYFromDistanceAngle(user.distance, user.angle);
+        {/* Render nearby users */}
+        {users.map((user) => {
+          const { top, left } = getXYFromDistanceAngle(
+            user.distance,
+            user.angle
+          );
           return (
             <Image
               key={user.userId}
