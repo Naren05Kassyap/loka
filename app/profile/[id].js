@@ -1,3 +1,4 @@
+// /app/profile/[id].js
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import {
   View,
@@ -46,29 +47,20 @@ export default function ProfileScreen() {
   const handleSaveTag = async () => {
     if (!user) return;
 
-    const payload = {
-      userId: user.userId,
-      tag: tagInput,
-    };
-
     try {
       setIsSaving(true);
       const res = await fetch('http://10.0.2.2:5000/location/tag', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({
+          userId: user.userId,
+          tag: tagInput,
+        }),
       });
 
       if (!res.ok) throw new Error(await res.text());
-
       Alert.alert('✅ Tag updated');
       setIsEditing(false);
-
-      // Refresh user to reflect saved tag
-      const refresh = await fetch(`http://10.0.2.2:5000/location/user/${user.userId}`);
-      const updated = await refresh.json();
-      setUser(updated);
-      setTagInput(updated.tag || '');
     } catch (err) {
       console.error('Failed to save tag:', err);
       Alert.alert('❌ Error updating tag');
@@ -124,7 +116,12 @@ export default function ProfileScreen() {
           )}
         </View>
       ) : (
-        user.tag && <Text style={styles.tag}>🎯 {user.tag}</Text>
+        <>
+          {user.tag && <Text style={styles.tag}>🎯 {user.tag}</Text>}
+          <View style={{ marginTop: 20 }}>
+            <Button title="Chat" onPress={() => router.push(`/chat/${user.userId}`)} />
+          </View>
+        </>
       )}
     </View>
   );
