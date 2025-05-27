@@ -29,8 +29,11 @@ exports.updateLocation = (req, res) => {
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
 
   const avatar = `https://api.dicebear.com/7.x/adventurer/png?seed=${encodeURIComponent(username)}`;
-
   let existingData = readLocationData();
+
+  const index = existingData.findIndex(entry => entry.userId === userId);
+
+  const existingTag = index !== -1 ? existingData[index].tag : '';
 
   const updatedEntry = {
     userId,
@@ -38,10 +41,9 @@ exports.updateLocation = (req, res) => {
     avatar,
     latitude,
     longitude,
+    tag: existingTag,
     timestamp: new Date().toISOString(),
   };
-
-  const index = existingData.findIndex(entry => entry.userId === userId);
 
   if (index !== -1) {
     existingData[index] = updatedEntry;
@@ -53,7 +55,29 @@ exports.updateLocation = (req, res) => {
 
   fs.writeFileSync(filePath, JSON.stringify(existingData, null, 2));
 
-  res.status(200).json({ message: 'User location and profile saved' });
+  res.status(200).json({ message: 'User location updated' });
+};
+
+// ✅ POST /location/tag
+exports.updateUserTag = (req, res) => {
+  const { userId, tag } = req.body;
+
+  if (!userId || typeof tag !== 'string') {
+    return res.status(400).json({ error: 'Missing userId or tag' });
+  }
+
+  if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'User data not found' });
+
+  let users = readLocationData();
+  const index = users.findIndex((u) => u.userId === userId);
+
+  if (index === -1) return res.status(404).json({ error: 'User not found' });
+
+  users[index].tag = tag;
+  fs.writeFileSync(filePath, JSON.stringify(users, null, 2));
+
+  console.log(`🏷️ Updated tag for ${userId}: ${tag}`);
+  res.status(200).json({ message: 'Tag updated successfully', tag });
 };
 
 // ✅ GET /location/all
@@ -84,8 +108,8 @@ exports.getNearbyUsers = (req, res) => {
     const a =
       Math.sin(dLat / 2) ** 2 +
       Math.cos(toRadians(lat1)) *
-        Math.cos(toRadians(lat2)) *
-        Math.sin(dLon / 2) ** 2;
+      Math.cos(toRadians(lat2)) *
+      Math.sin(dLon / 2) ** 2;
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     return R * c;
   };
@@ -113,4 +137,17 @@ exports.getNearbyUsers = (req, res) => {
     .filter(user => user.distance <= maxDistance);
 
   res.json(results);
+};
+
+// ✅ GET /location/user/:id
+exports.getUserById = (req, res) => {
+  const { id } = req.params;
+  const users = readLocationData();
+  const user = users.find(u => u.userId === id);
+
+  if (user) {
+    res.json(user);
+  } else {
+    res.status(404).json({ error: 'User not found' });
+  }
 };

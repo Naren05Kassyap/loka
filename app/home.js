@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
   View,
   StyleSheet,
@@ -7,10 +7,12 @@ import {
   ActivityIndicator,
   Alert,
   Text,
+  Pressable,
   Animated,
   Easing,
 } from 'react-native';
 import * as Location from 'expo-location';
+import { useRouter, useFocusEffect } from 'expo-router';
 
 const { width } = Dimensions.get('window');
 const RADAR_RADIUS = width * 0.8;
@@ -20,10 +22,12 @@ const AVATAR_SIZE = 40;
 
 export default function HomeScreen() {
   const [users, setUsers] = useState([]);
+  const [selfTag, setSelfTag] = useState('');
   const [loading, setLoading] = useState(true);
   const placedAvatars = [];
+  const router = useRouter();
+  const pulseAnim = useState(new Animated.Value(0))[0];
 
-  // 🔁 Modular location update function
   const sendLocationToBackend = async () => {
     try {
       const location = await Location.getCurrentPositionAsync({});
@@ -42,7 +46,6 @@ export default function HomeScreen() {
         body: JSON.stringify(payload),
       });
 
-      console.log('📡 Location updated');
       return { latitude, longitude };
     } catch (err) {
       console.warn('❌ Failed to update location:', err);
@@ -50,7 +53,16 @@ export default function HomeScreen() {
     }
   };
 
-  // ✅ Fetch on initial load
+  const fetchSelfTag = async () => {
+    try {
+      const res = await fetch(`http://10.0.2.2:5000/location/user/123e4567-e89b-12d3-a456-426614174000`);
+      const user = await res.json();
+      setSelfTag(user.tag || '');
+    } catch (err) {
+      console.warn('❌ Failed to fetch self tag:', err);
+    }
+  };
+
   useEffect(() => {
     (async () => {
       let { status } = await Location.requestForegroundPermissionsAsync();
@@ -60,6 +72,7 @@ export default function HomeScreen() {
       }
 
       const coords = await sendLocationToBackend();
+      await fetchSelfTag();
       if (!coords) return;
 
       const res = await fetch(
@@ -71,45 +84,29 @@ export default function HomeScreen() {
     })();
   }, []);
 
-  // 🔄 Keep sending location every 10 seconds
+  useFocusEffect(
+    useCallback(() => {
+      fetchSelfTag();
+    }, [])
+  );
+
   useEffect(() => {
     const interval = setInterval(() => {
       sendLocationToBackend();
     }, 10000);
-
     return () => clearInterval(interval);
   }, []);
 
-  const renderDistanceRings = () => {
-    const rings = [10, 20, 30, 40, 50];
-    return rings.map((radius) => {
-      const pixelRadius = (radius / MAX_RADIUS_METERS) * (RADAR_RADIUS / 2);
-      return (
-        <View
-          key={radius}
-          style={{
-            position: 'absolute',
-            top: RADAR_CENTER - pixelRadius,
-            left: RADAR_CENTER - pixelRadius,
-            width: pixelRadius * 2,
-            height: pixelRadius * 2,
-            borderRadius: pixelRadius,
-            borderWidth: 1,
-            borderColor: '#444',
-            opacity: 0.4,
-            justifyContent: 'center',
-            alignItems: 'center',
-          }}
-        >
-          {radius % 20 === 0 && (
-            <View style={{ position: 'absolute', top: -10 }}>
-              <Text style={{ color: '#888', fontSize: 10 }}>{radius}m</Text>
-            </View>
-          )}
-        </View>
-      );
-    });
-  };
+  useEffect(() => {
+    Animated.loop(
+      Animated.timing(pulseAnim, {
+        toValue: 1,
+        duration: 3000,
+        easing: Easing.out(Easing.ease),
+        useNativeDriver: true,
+      })
+    ).start();
+  }, []);
 
   const isOverlapping = (x, y, radius = AVATAR_SIZE) => {
     for (const placed of placedAvatars) {
@@ -153,35 +150,116 @@ export default function HomeScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.radar}>
-        {renderDistanceRings()}
+        {/* Static concentric rings (extending outward) */}
+        {Array.from({ length: 8 }).map((_, i) => {
+          const ringRadius = ((i + 1) / 5) * RADAR_RADIUS;
+          const ringOpacity = 1 - i * 0.12;
+          return (
+            <View
+              key={`ring-${i}`}
+              style={{
+                position: 'absolute',
+                top: RADAR_CENTER - ringRadius / 2,
+                left: RADAR_CENTER - ringRadius / 2,
+                width: ringRadius,
+                height: ringRadius,
+                borderRadius: ringRadius / 2,
+                borderWidth: 1,
+                borderColor: `rgba(0, 0, 0, ${ringOpacity})`,
+                zIndex: 0,
+              }}
+            />
+          );
+        })}
 
-        {/* Center avatar */}
-        <Image
-          source={{ uri: 'https://api.dicebear.com/7.x/adventurer/png?seed=You' }}
+        {/* Animated pulse ring */}
+        <Animated.View
           style={[
-            styles.avatar,
+            styles.pulseRing,
             {
-              top: RADAR_CENTER - AVATAR_SIZE / 2,
-              left: RADAR_CENTER - AVATAR_SIZE / 2,
+              transform: [
+                {
+                  scale: pulseAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [1, 2],
+                  }),
+                },
+              ],
+              opacity: pulseAnim.interpolate({
+                inputRange: [0, 1],
+                outputRange: [0.25, 0],
+              }),
             },
           ]}
         />
 
-        {/* Clear avatar position memory */}
+        {/* Self avatar */}
+        <Pressable
+          onPress={() => router.push('/profile/123e4567-e89b-12d3-a456-426614174000')}
+          style={{
+            position: 'absolute',
+            top: RADAR_CENTER - AVATAR_SIZE / 2,
+            left: RADAR_CENTER - AVATAR_SIZE / 2,
+            alignItems: 'center',
+            width: AVATAR_SIZE,
+          }}
+        >
+          <Image
+            source={{ uri: 'https://api.dicebear.com/7.x/adventurer/png?seed=You' }}
+            style={styles.avatar}
+          />
+        </Pressable>
+
+        {/* Self tag */}
+        {selfTag !== '' && (
+          <Text
+            numberOfLines={1}
+            style={[
+              styles.tagText,
+              {
+                position: 'absolute',
+                top: RADAR_CENTER + AVATAR_SIZE / 2 + 2,
+                left: RADAR_CENTER - 30,
+                width: 60,
+                textAlign: 'center',
+              },
+            ]}
+          >
+            {selfTag}
+          </Text>
+        )}
+
         {placedAvatars.splice(0, placedAvatars.length)}
 
-        {/* Render nearby users */}
+        {/* Nearby users */}
         {users.map((user) => {
-          const { top, left } = getXYFromDistanceAngle(
-            user.distance,
-            user.angle
-          );
+          const { top, left } = getXYFromDistanceAngle(user.distance, user.angle);
           return (
-            <Image
-              key={user.userId}
-              source={{ uri: user.avatar }}
-              style={[styles.avatar, { top, left }]}
-            />
+            <React.Fragment key={user.userId}>
+              <Pressable
+                onPress={() => router.push(`/profile/${user.userId}`)}
+                style={{ position: 'absolute', top, left }}
+              >
+                <Image source={{ uri: user.avatar }} style={styles.avatar} />
+              </Pressable>
+              {user.tag && (
+                <Text
+                  numberOfLines={1}
+                  style={[
+                    styles.tagText,
+                    {
+                      position: 'absolute',
+                      top: top + AVATAR_SIZE + 2,
+                      left: left + AVATAR_SIZE / 2 - 30,
+                      width: 60,
+                      textAlign: 'center',
+                    },
+                  ]}
+                >
+                  {user.tag}
+                </Text>
+              )}
+            </React.Fragment>
           );
         })}
       </View>
@@ -192,7 +270,7 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0a0a0a',
+    backgroundColor: '#fff', // white background
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -200,17 +278,32 @@ const styles = StyleSheet.create({
     width: RADAR_RADIUS,
     height: RADAR_RADIUS,
     borderRadius: RADAR_RADIUS / 2,
-    borderWidth: 2,
-    borderColor: '#1eff00',
-    backgroundColor: '#101010',
     position: 'relative',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   avatar: {
     width: AVATAR_SIZE,
     height: AVATAR_SIZE,
     borderRadius: AVATAR_SIZE / 2,
-    borderWidth: 1,
-    borderColor: '#fff',
+    borderWidth: 1.5,
+    borderColor: '#000',
     position: 'absolute',
+  },
+  tagText: {
+    color: '#444',
+    fontSize: 10,
+  },
+  pulseRing: {
+    position: 'absolute',
+    top: RADAR_CENTER - RADAR_RADIUS / 2,
+    left: RADAR_CENTER - RADAR_RADIUS / 2,
+    width: RADAR_RADIUS,
+    height: RADAR_RADIUS,
+    borderRadius: RADAR_RADIUS / 2,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.25)',
+    backgroundColor: 'rgba(0, 0, 0, 0.04)',
+    zIndex: 0,
   },
 });
